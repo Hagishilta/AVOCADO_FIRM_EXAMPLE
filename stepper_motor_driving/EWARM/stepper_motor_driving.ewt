@@ -1438,6 +1438,21 @@
                 <file>
                     <name>$PROJ_DIR$\..\Src\st2_driver\st2_driver.h</name>
                 </file>
+                <file>
+                    <name>$PROJ_DIR$\..\Src\st2_driver\st2_hardware.h</name>
+                </file>
+            </group>
+            <group>
+                <name>st5_driver</name>
+                <file>
+                    <name>$PROJ_DIR$\..\Src\st5_driver\st5_driver.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\Src\st5_driver\st5_driver.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\Src\st5_driver\st5_hardware.h</name>
+                </file>
             </group>
             <file>
                 <name>$PROJ_DIR$\..\Src\main.c</name>

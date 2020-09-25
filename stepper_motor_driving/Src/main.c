@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "st2_driver/st2_driver.h"
+#include "st5_driver/st5_driver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -79,15 +80,27 @@ static void MX_TIM2_Init(void);
 #define DISABLE_ST5     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET)
 
 float st2_pwmDuty[4];
+float st5_pwmDuty[5];
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   if(htim == &htim2){
+    
     ST2_Loop();
+    ST5_Loop();
+    
     ST2_getPWM(st2_pwmDuty);
+    ST5_getPWM(st5_pwmDuty);
     
     TIM4->CCR1 = (uint16_t)(st2_pwmDuty[0] * TIM4->ARR);
     TIM4->CCR3 = (uint16_t)(st2_pwmDuty[1] * TIM4->ARR);
     TIM4->CCR4 = (uint16_t)(st2_pwmDuty[2] * TIM4->ARR);
     TIM4->CCR2 = (uint16_t)(st2_pwmDuty[3] * TIM4->ARR);
+    
+    TIM8->CCR4 = (uint16_t)(st5_pwmDuty[0] * TIM8->ARR);
+    TIM8->CCR3 = (uint16_t)(st5_pwmDuty[1] * TIM8->ARR);
+    TIM8->CCR2 = (uint16_t)(st5_pwmDuty[2] * TIM8->ARR);
+    TIM1->CCR2 = (uint16_t)(st5_pwmDuty[3] * TIM1->ARR);
+    TIM1->CCR1 = (uint16_t)(st5_pwmDuty[4] * TIM1->ARR);
+    
   }
 }
 /* USER CODE END 0 */
@@ -146,7 +159,8 @@ int main(void)
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);     // ST5 B
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_4);     // ST5 A
   
-  ST2_Init(20000, 0.116666667f);
+  ST2_Init(20000);
+  ST5_Init(20000);
   
   ENABLE_GATE;
   ENABLE_DC;

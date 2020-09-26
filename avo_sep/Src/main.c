@@ -76,6 +76,10 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
+uint8_t current_state;
+uint8_t button_mode[2];
+
 // IO
 //uint8_t relay;
 GPIO_TypeDef* inputPort[] = {GPIOD, GPIOD, GPIOB, GPIOB, GPIOB, GPIOB, GPIOD, GPIOD};
@@ -225,6 +229,11 @@ bool parse_casData(){
 }
 
 // Motor - DC
+#define MOTOR_SPEED_2 300
+#define MOTOR_SPEED_5 300
+#define MOTOR_FREQUENCY_2 20000
+#define MOTOR_FREQUENCY_5 20000
+
 float dc_speed_demand; // [-100, 100]
 float dc_speed_command;
 int16_t pwm_duty;
@@ -244,8 +253,14 @@ int16_t pwm_duty;
 
 float st2_pwmDuty[4];
 float st5_pwmDuty[5];
+
+uint8_t x;
+uint16_t y;
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   if(htim == &htim2){
+    
+    parse_casData();
     
     ST2_Loop();
     ST5_Loop();
@@ -264,12 +279,80 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
     TIM1->CCR2 = (uint16_t)(st5_pwmDuty[3] * TIM1->ARR);
     TIM1->CCR1 = (uint16_t)(st5_pwmDuty[4] * TIM1->ARR);
     
+    // TODO : Check GPIO Read & Write iteration works.
+    
+    // Sauce - Piston Cylinder Home Position
+    if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4)){
+      st2.speed = 0;
+      st2.current_cnt = st2.input_cnt;
+    }
+    
+    // Selector Switch - Mode change
+    
+    //if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET) x++;
+    //else x = 0;
+    
+    //if(x > 100) button_mode[0] = 1;
+    //else button_mode[0] = 0;
+      
+    /*
+    button_mode[0] = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
+    button_mode[1] = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
+    // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
+    if(button_mode[0] == 0 && button_mode[1] == 0){
+      // STOP(0)
+      current_state = 0;
+    }
+    else if(button_mode[0] == 1 && button_mode[1] == 0){
+      // AUTO(1)
+      current_state = 1;
+    }
+    else if(button_mode[0] == 0 && button_mode[1] == 1){
+      // MANUAL(2)
+      current_state = 2;
+    }
+    else{
+      // error
+      // current_state = -1;
+      return;
+    }*/
+    
+    y = TIM2->CNT;
+    
+  }
+}
+
+// Sauce
+#define POSITION_HALF 5000
+#define POSITION_NORMAL 10000
+#define POSITION_ONEHALF 15000
+#define POSITION_MAXIMUM 25000
+#define POSITION_DISASSEMBLE 30000
+
+void three_way_valve(bool n){
+  if(n){
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_SET);
+  }
+  else{
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_RESET);
+  }
+}
+
+void anti_drop_valve(bool n){
+  if(n){
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_SET);
+  }
+  else{
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_RESET);
   }
 }
 
 
+// Serial Communication with Raspberry Pi
 uint8_t txBuffer;
 uint8_t rxBuffer;
+
+
 /* USER CODE END 0 */
 
 /**
@@ -331,8 +414,8 @@ int main(void)
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);     // ST5 B
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_4);     // ST5 A
   
-  ST2_Init(20000);
-  ST5_Init(20000);
+  ST2_Init(MOTOR_FREQUENCY_2);
+  ST5_Init(MOTOR_FREQUENCY_5);
   
   ENABLE_GATE;
   ENABLE_DC;
@@ -341,10 +424,24 @@ int main(void)
   
   HAL_TIM_Base_Start_IT(&htim2); // 20kHz Interrupt
   
-  st2.speed = 300;
-  st5.speed = 300;
+  // TODO : Check the rotate direction
+  st2.speed = MOTOR_SPEED_2;
+  st5.speed = MOTOR_SPEED_5;
   
+  // Power LED ON
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);
+  current_state = 1;
   
+  if(current_state == 1){
+    // 3 way valve OPEN
+    three_way_valve(true);
+    
+    // anti drop valve CLOSE
+    anti_drop_valve(false);
+    
+    // piston cylinder CLOSE (HOME)
+    st2.input_cnt = 10000;
+  }
   
   /* USER CODE END 2 */
 
@@ -353,111 +450,84 @@ int main(void)
   while (1)
   {
     uint8_t i, j;
-    parse_casData();
-    if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
-      if(rxBuffer == '0'){
-        st5.input_cnt = 1000;
-      }
-      else if(rxBuffer == '1'){
-        st5.input_cnt = 0;
-      }
-      else if(rxBuffer == '2'){
-        st2.input_cnt = 1000;
-      }
-      else if(rxBuffer == '3'){
-        st2.input_cnt = 0;
-      }
-      else if(rxBuffer == '4'){
-        dc_speed_demand = 100.0f;
-        while(1){
-          dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
-          dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+    
+    
+    // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
+    if(current_state == 0){
+      // STOP/DISASSEMBLE
+      
+    }
+    else if(current_state == 1){
+      // AUTO (From KMS)
+      if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
+        if(rxBuffer == '0'){
+          //
+        }
+        else if(rxBuffer == '1'){
+          // Pre-load
+          st2.input_cnt = POSITION_HALF;
           
-          pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
-          if(pwm_duty < 0){
-            htim12.Instance->CCR1 = 0;
-            htim12.Instance->CCR2 = -pwm_duty;
-          }else{
-            htim12.Instance->CCR2 = 0;
-            htim12.Instance->CCR1 = pwm_duty;
-          }
+        }
+        else if(rxBuffer == '2'){
+          // Pre-load
+          // Piston Cylinder OPEN
+          st2.input_cnt = POSITION_NORMAL;
+        }
+        else if(rxBuffer == '3'){
+          // Pre-load
+          st2.input_cnt = POSITION_ONEHALF;
           
-          HAL_Delay(3);
-          if(pwm_duty >= 4490){
-            break;
+        }
+        else if(rxBuffer == '4'){
+          // Pre-load
+        }
+        else if(rxBuffer == '5'){
+          // Pre-load
+          st2.input_cnt = POSITION_MAXIMUM;
+          
+        }
+        else if(rxBuffer == '6'){
+          // Pre-load
+          st2.input_cnt = POSITION_DISASSEMBLE;
+          
+        }
+        else if(rxBuffer == 0x61){      // 'a'
+          for(j=0; j<8; ++j){
+            HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
+            HAL_Delay(200);
+            //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
           }
         }
-      }
-      else if(rxBuffer == '5'){
-        dc_speed_demand = 0.0f;
-        while(1){
-          dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
-          dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
-          
-          pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
-          if(pwm_duty < 0){
-            htim12.Instance->CCR1 = 0;
-            htim12.Instance->CCR2 = -pwm_duty;
-          }else{
-            htim12.Instance->CCR2 = 0;
-            htim12.Instance->CCR1 = pwm_duty;
-          }
-          
-          HAL_Delay(3);
-          if(-10 <= pwm_duty && pwm_duty <= 10){
-            break;
+        else if(rxBuffer == 0x62){      // 'b'
+          for(j=0; j<8; ++j){
+            HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
+            HAL_Delay(200);
+            //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
           }
         }
-      }
-      else if(rxBuffer == '6'){
-        dc_speed_demand = -100.0f;
-        while(1){
-          dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
-          dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+        else if(rxBuffer == '9'){
           
-          pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
-          if(pwm_duty < 0){
-            htim12.Instance->CCR1 = 0;
-            htim12.Instance->CCR2 = -pwm_duty;
-          }else{
-            htim12.Instance->CCR2 = 0;
-            htim12.Instance->CCR1 = pwm_duty;
-          }
-          
-          HAL_Delay(3);
-          if(pwm_duty <= -4490){
-            break;
-          }
         }
-      }
-      else if(rxBuffer == '7'){
-        for(j=0; j<8; ++j){
-          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
-          HAL_Delay(200);
-          //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
-          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
-        }
-      }
-      else if(rxBuffer == '8'){
-        for(j=0; j<8; ++j){
-          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
-          HAL_Delay(200);
-          //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
-          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
-        }
-      }
-      else if(rxBuffer == '9'){
-        
       }
     }
+    else if(current_state == 2){
+      // MANUAL
+    }
+    else{
+      // Error : Unavailable Current State
+    }
+    
+    
     
     /*
     if(parse_casData()){
       if(m_casData.header1 == CAS_STABLE){
-        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);     // LED ON
       }
       else{
-        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET);   // LED OFF
       }
     }
     */
@@ -613,6 +683,66 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
   }
+  
+  /* Test while loop
+  while (1){
+    uint8_t i, j;
+    parse_casData();
+    if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
+      if(rxBuffer == '0'){
+        
+      }
+      else if(rxBuffer == '1'){
+        break;
+      }
+      else if(rxBuffer == '2'){
+        
+      }
+      else if(rxBuffer == '3'){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
+          HAL_Delay(200);
+          //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == '4'){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
+          HAL_Delay(200);
+          //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == '5'){
+        
+      }
+      else if(rxBuffer == '6'){
+        
+      }
+      else if(rxBuffer == 0x61){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
+          HAL_Delay(200);
+          //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == 0x62){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
+          HAL_Delay(200);
+          //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == '9'){
+        
+      }
+    }
+  }
+  */
+  
   /* USER CODE END 3 */
 }
 

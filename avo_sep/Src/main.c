@@ -76,6 +76,19 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// IO
+//uint8_t relay;
+GPIO_TypeDef* inputPort[] = {GPIOD, GPIOD, GPIOB, GPIOB, GPIOB, GPIOB, GPIOD, GPIOD};
+uint16_t inputPin[] = {GPIO_PIN_4, GPIO_PIN_6, GPIO_PIN_3, GPIO_PIN_4, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_7, GPIO_PIN_5};
+
+//uint8_t sensor;
+GPIO_TypeDef* outputPort[] = {GPIOD, GPIOD, GPIOC, GPIOA, GPIOC, GPIOC, GPIOD, GPIOD};
+uint16_t outputPin[] = {GPIO_PIN_1, GPIO_PIN_0, GPIO_PIN_11, GPIO_PIN_15, GPIO_PIN_10, GPIO_PIN_12, GPIO_PIN_2, GPIO_PIN_3};
+
+uint8_t inputval[8];
+
+
+
 // CAS Load Cell
 typedef enum _CAS_HEADER1{
  CAS_OVERLOAD,
@@ -331,12 +344,15 @@ int main(void)
   st2.speed = 300;
   st5.speed = 300;
   
+  
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    uint8_t i, j;
     parse_casData();
     if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
       if(rxBuffer == '0'){
@@ -388,7 +404,7 @@ int main(void)
           }
           
           HAL_Delay(3);
-          if(pwm_duty <= -4490){
+          if(-10 <= pwm_duty && pwm_duty <= 10){
             break;
           }
         }
@@ -414,7 +430,185 @@ int main(void)
           }
         }
       }
+      else if(rxBuffer == '7'){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
+          HAL_Delay(200);
+          //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == '8'){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
+          HAL_Delay(200);
+          //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == '9'){
+        
+      }
     }
+    
+    /*
+    if(parse_casData()){
+      if(m_casData.header1 == CAS_STABLE){
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);
+      }
+      else{
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET);
+      }
+    }
+    */
+    
+    /*
+    if(m_casData.data <= -10){
+      dc_speed_demand = 0.0f;
+      while(1){
+        dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
+        dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+        
+        pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
+        if(pwm_duty < 0){
+          htim12.Instance->CCR1 = 0;
+          htim12.Instance->CCR2 = -pwm_duty;
+        }else{
+          htim12.Instance->CCR2 = 0;
+          htim12.Instance->CCR1 = pwm_duty;
+        }
+        
+        HAL_Delay(3);
+        if(-10 <= pwm_duty && pwm_duty <= 10){
+          break;
+        }
+      }
+    }
+    else{
+      dc_speed_demand = 100.0f;
+      while(1){
+        dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
+        dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+        
+        pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
+        if(pwm_duty < 0){
+          htim12.Instance->CCR1 = 0;
+          htim12.Instance->CCR2 = -pwm_duty;
+        }else{
+          htim12.Instance->CCR2 = 0;
+          htim12.Instance->CCR1 = pwm_duty;
+        }
+        
+        HAL_Delay(3);
+        if(pwm_duty >= 4490){
+          break;
+        }
+      }
+    }
+    */
+    
+    /*
+    // Board test code
+    if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
+      if(rxBuffer == '0'){
+        st5.input_cnt = 1000;
+      }
+      else if(rxBuffer == '1'){
+        st5.input_cnt = 0;
+      }
+      else if(rxBuffer == '2'){
+        st2.input_cnt = 1000;
+      }
+      else if(rxBuffer == '3'){
+        st2.input_cnt = 0;
+      }
+      else if(rxBuffer == '4'){
+        dc_speed_demand = 100.0f;
+        while(1){
+          dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
+          dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+          
+          pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
+          if(pwm_duty < 0){
+            htim12.Instance->CCR1 = 0;
+            htim12.Instance->CCR2 = -pwm_duty;
+          }else{
+            htim12.Instance->CCR2 = 0;
+            htim12.Instance->CCR1 = pwm_duty;
+          }
+          
+          HAL_Delay(3);
+          if(pwm_duty >= 4490){
+            break;
+          }
+        }
+      }
+      else if(rxBuffer == '5'){
+        dc_speed_demand = 0.0f;
+        while(1){
+          dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
+          dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+          
+          pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
+          if(pwm_duty < 0){
+            htim12.Instance->CCR1 = 0;
+            htim12.Instance->CCR2 = -pwm_duty;
+          }else{
+            htim12.Instance->CCR2 = 0;
+            htim12.Instance->CCR1 = pwm_duty;
+          }
+          
+          HAL_Delay(3);
+          if(-10 <= pwm_duty && pwm_duty <= 10){
+            break;
+          }
+        }
+      }
+      else if(rxBuffer == '6'){
+        dc_speed_demand = -100.0f;
+        while(1){
+          dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
+          dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+          
+          pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
+          if(pwm_duty < 0){
+            htim12.Instance->CCR1 = 0;
+            htim12.Instance->CCR2 = -pwm_duty;
+          }else{
+            htim12.Instance->CCR2 = 0;
+            htim12.Instance->CCR1 = pwm_duty;
+          }
+          
+          HAL_Delay(3);
+          if(pwm_duty <= -4490){
+            break;
+          }
+        }
+      }
+      else if(rxBuffer == '7'){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
+          HAL_Delay(200);
+          //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == '8'){
+        for(j=0; j<8; ++j){
+          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
+          HAL_Delay(200);
+          //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
+          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
+        }
+      }
+      else if(rxBuffer == '9'){
+        
+      }
+    }
+    
+    */
+    
+    
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

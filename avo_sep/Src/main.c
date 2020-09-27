@@ -76,11 +76,9 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-uint8_t current_state;
-uint8_t button_mode[2];
 
-// IO
+
+// START IO
 //uint8_t relay;
 GPIO_TypeDef* inputPort[] = {GPIOD, GPIOD, GPIOB, GPIOB, GPIOB, GPIOB, GPIOD, GPIOD};
 uint16_t inputPin[] = {GPIO_PIN_4, GPIO_PIN_6, GPIO_PIN_3, GPIO_PIN_4, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_7, GPIO_PIN_5};
@@ -90,10 +88,11 @@ GPIO_TypeDef* outputPort[] = {GPIOD, GPIOD, GPIOC, GPIOA, GPIOC, GPIOC, GPIOD, G
 uint16_t outputPin[] = {GPIO_PIN_1, GPIO_PIN_0, GPIO_PIN_11, GPIO_PIN_15, GPIO_PIN_10, GPIO_PIN_12, GPIO_PIN_2, GPIO_PIN_3};
 
 uint8_t inputval[8];
+// END IO
 
 
 
-// CAS Load Cell
+// START CAS Load Cell
 typedef enum _CAS_HEADER1{
  CAS_OVERLOAD,
  CAS_UNDERLOAD,
@@ -227,8 +226,11 @@ bool parse_casData(){
   return true;
   
 }
+// END CAS Load Cell
 
-// Motor - DC
+
+
+// START Motor - DC
 #define MOTOR_SPEED_2 300
 #define MOTOR_SPEED_5 300
 #define MOTOR_FREQUENCY_2 20000
@@ -254,24 +256,41 @@ int16_t pwm_duty;
 float st2_pwmDuty[4];
 float st5_pwmDuty[5];
 
-uint8_t x;
-uint16_t y;
+// END Motor
+
+
+
+// START Callback every 20kHz (= 20000Hz)
+// State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
+uint8_t current_mode;
+uint8_t button_mode[2];
+uint8_t current_state;
+
+uint8_t cnt_piston_home;
+//bool flag_piston_home;
+uint8_t cnt_state;
+//bool flag_state_change
+uint16_t my_cnt;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   if(htim == &htim2){
-    
+    // CAS load cell
     parse_casData();
     
+    // Stepping motor - 2phase
     ST2_Loop();
-    ST5_Loop();
     
     ST2_getPWM(st2_pwmDuty);
-    ST5_getPWM(st5_pwmDuty);
     
     TIM4->CCR1 = (uint16_t)(st2_pwmDuty[0] * TIM4->ARR);
     TIM4->CCR3 = (uint16_t)(st2_pwmDuty[1] * TIM4->ARR);
     TIM4->CCR4 = (uint16_t)(st2_pwmDuty[2] * TIM4->ARR);
     TIM4->CCR2 = (uint16_t)(st2_pwmDuty[3] * TIM4->ARR);
+    
+    // Stepping motor - 5phase
+    ST5_Loop();
+    
+    ST5_getPWM(st5_pwmDuty);
     
     TIM8->CCR4 = (uint16_t)(st5_pwmDuty[0] * TIM8->ARR);
     TIM8->CCR3 = (uint16_t)(st5_pwmDuty[1] * TIM8->ARR);
@@ -279,50 +298,72 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
     TIM1->CCR2 = (uint16_t)(st5_pwmDuty[3] * TIM1->ARR);
     TIM1->CCR1 = (uint16_t)(st5_pwmDuty[4] * TIM1->ARR);
     
-    // TODO : Check GPIO Read & Write iteration works.
     
-    // Sauce - Piston Cylinder Home Position
-    if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4)){
-      st2.speed = 0;
-      st2.current_cnt = st2.input_cnt;
-    }
-    
-    // Selector Switch - Mode change
-    
+    /* Button input method example
     //if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET) x++;
     //else x = 0;
     
     //if(x > 100) button_mode[0] = 1;
     //else button_mode[0] = 0;
-      
-    /*
-    button_mode[0] = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
-    button_mode[1] = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
+    */
+    
+    // Sauce - Piston Cylinder Home Position
+    if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4) == GPIO_PIN_SET){
+      cnt_piston_home++;
+    }
+    else{
+      cnt_piston_home = 0;
+    }
+    
+    if(cnt_piston_home > 100){
+      if(current_mode > 0){
+        st2.speed = 0;
+        st2.current_cnt = st2.input_cnt;
+      }
+    }
+    
+    // Selector Switch - Mode change
+    if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET){
+      button_mode[0]++;
+    }
+    else{
+      button_mode[0] = 0;
+    }
+    if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6) == GPIO_PIN_SET){
+      button_mode[1]++;
+    }
+    else{
+      button_mode[1] = 0;
+    }
+    
     // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-    if(button_mode[0] == 0 && button_mode[1] == 0){
-      // STOP(0)
-      current_state = 0;
+    if(button_mode[0] < 100 && button_mode[1] < 100){
+      // STOP/DISASSEMBLE(0)
+      current_mode = 0;
     }
-    else if(button_mode[0] == 1 && button_mode[1] == 0){
+    else if(button_mode[0] >= 100 && button_mode[1] < 100){
       // AUTO(1)
-      current_state = 1;
+      current_mode = 1;
     }
-    else if(button_mode[0] == 0 && button_mode[1] == 1){
+    else if(button_mode[0] < 100 && button_mode[1] >= 100){
       // MANUAL(2)
-      current_state = 2;
+      current_mode = 2;
     }
     else{
       // error
-      // current_state = -1;
-      return;
-    }*/
+      // current_mode = -1;
+      // return;
+    }
     
-    y = TIM2->CNT;
+    my_cnt = TIM2->CNT;
     
   }
 }
+// END Callback
 
-// Sauce
+
+
+// START Sauce
 #define POSITION_HALF 5000
 #define POSITION_NORMAL 10000
 #define POSITION_ONEHALF 15000
@@ -347,10 +388,34 @@ void anti_drop_valve(bool n){
   }
 }
 
+void power_alert_led(bool n){
+  if(n){
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);
+  }
+  else{
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET);
+  }
+}
 
-// Serial Communication with Raspberry Pi
+void buzzer_sound(bool n){
+  if(n){
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  }
+  else{
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
+  }
+}
+
+// END Sauce
+
+
+
+// START Serial Communication with Raspberry Pi
 uint8_t txBuffer;
 uint8_t rxBuffer;
+
+// END Serial Communication with Raspberry Pi
+
 
 
 /* USER CODE END 0 */
@@ -428,11 +493,18 @@ int main(void)
   st2.speed = MOTOR_SPEED_2;
   st5.speed = MOTOR_SPEED_5;
   
-  // Power LED ON
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);
-  current_state = 1;
+  power_alert_led(true);
   
-  if(current_state == 1){
+  // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
+  while(1){
+    HAL_Delay(1000);
+    if(current_mode == 1){
+      break;
+    }
+  }
+  
+  // Double check AUTO(1) mode
+  if(current_mode == 1){
     // 3 way valve OPEN
     three_way_valve(true);
     
@@ -440,7 +512,13 @@ int main(void)
     anti_drop_valve(false);
     
     // piston cylinder CLOSE (HOME)
-    st2.input_cnt = 10000;
+    // st2.input_cnt = 10000;
+  }
+  else{
+    // Error
+    while(1){
+      HAL_Delay(1000);
+    }
   }
   
   /* USER CODE END 2 */
@@ -451,13 +529,12 @@ int main(void)
   {
     uint8_t i, j;
     
-    
     // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-    if(current_state == 0){
+    if(current_mode == 0){
       // STOP/DISASSEMBLE
       
     }
-    else if(current_state == 1){
+    else if(current_mode == 1){
       // AUTO (From KMS)
       if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
         if(rxBuffer == '0'){
@@ -512,7 +589,7 @@ int main(void)
         }
       }
     }
-    else if(current_state == 2){
+    else if(current_mode == 2){
       // MANUAL
     }
     else{

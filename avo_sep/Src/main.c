@@ -231,8 +231,8 @@ bool parse_casData(){
 
 
 // START Motor - DC
-#define MOTOR_SPEED_2 300
-#define MOTOR_SPEED_5 300
+#define MOTOR_SPEED_2 800
+#define MOTOR_SPEED_5 800
 #define MOTOR_FREQUENCY_2 20000
 #define MOTOR_FREQUENCY_5 20000
 
@@ -307,8 +307,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
     //else button_mode[0] = 0;
     */
     
+    
+    /*
     // Sauce - Piston Cylinder Home Position
-    if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4) == GPIO_PIN_SET){
+    if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4) == GPIO_PIN_RESET){
       cnt_piston_home++;
     }
     else{
@@ -336,24 +338,27 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
       button_mode[1] = 0;
     }
     
+    
     // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-    if(button_mode[0] < 100 && button_mode[1] < 100){
+    if(button_mode[0] >= 100 && button_mode[1] >= 100){
       // STOP/DISASSEMBLE(0)
       current_mode = 0;
     }
-    else if(button_mode[0] >= 100 && button_mode[1] < 100){
+    else if(button_mode[0] >= 100 && button_mode[1] < 10){
       // AUTO(1)
       current_mode = 1;
     }
-    else if(button_mode[0] < 100 && button_mode[1] >= 100){
+    else if(button_mode[0] < 10 && button_mode[1] >= 100){
       // MANUAL(2)
       current_mode = 2;
     }
     else{
-      // error
-      // current_mode = -1;
+      // error - STOP(0)
+      current_mode = 0;
       // return;
     }
+*/
+
     
     my_cnt = TIM2->CNT;
     
@@ -363,12 +368,34 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 
 
+// START Screw
+
+
+
+
+
+
+// END Screw
+
+
+
+// START Rotary
+
+
+
+
+
+
+// END Rotary
+
+
+
 // START Sauce
 #define POSITION_HALF 5000
 #define POSITION_NORMAL 10000
 #define POSITION_ONEHALF 15000
 #define POSITION_MAXIMUM 25000
-#define POSITION_DISASSEMBLE 30000
+#define POSITION_DISASSEMBLE 100000
 
 void three_way_valve(bool n){
   if(n){
@@ -493,7 +520,33 @@ int main(void)
   st2.speed = MOTOR_SPEED_2;
   st5.speed = MOTOR_SPEED_5;
   
+  // SAUCE TEST CODE : Check functionality
+  bool flag = true;
+  uint8_t i, j;
+  
+  for(j=0; j<8; ++j){
+      HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
+    }
   power_alert_led(true);
+  
+  /*
+  while(1){
+    // Solenoid TEST
+    power_alert_led(flag);
+    //three_way_valve(flag);
+    //anti_drop_valve(flag);
+    
+    // IO TEST
+    
+    
+    for(j=0; j<8; ++j){
+      //HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
+    }   
+    flag = !flag;
+  }*/
+
+
+  
   
   // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
   while(1){
@@ -559,30 +612,33 @@ int main(void)
           // Pre-load
         }
         else if(rxBuffer == '5'){
-          // Pre-load
-          st2.input_cnt = POSITION_MAXIMUM;
+          // output
           
+          // If not permissive, Hold & Buzzer ON & Alert LED ON.
+          while(1){
+          }
+          
+          three_way_valve(false);
+          HAL_Delay(500);
+          anti_drop_valve(true);
+          HAL_Delay(500);
+          st2.input_cnt = POSITION_DISASSEMBLE;
+          while(st2.speed >= 5){
+            HAL_Delay(500);
+          }
+          anti_drop_valve(true);
+          HAL_Delay(500);
+          three_way_valve(false);
         }
         else if(rxBuffer == '6'){
-          // Pre-load
-          st2.input_cnt = POSITION_DISASSEMBLE;
+          //
           
         }
         else if(rxBuffer == 0x61){      // 'a'
-          for(j=0; j<8; ++j){
-            HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
-            HAL_Delay(200);
-            //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
-          }
+          
         }
         else if(rxBuffer == 0x62){      // 'b'
-          for(j=0; j<8; ++j){
-            HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
-            HAL_Delay(200);
-            //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
-          }
+          
         }
         else if(rxBuffer == '9'){
           

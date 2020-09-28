@@ -3,7 +3,8 @@
 
 // NK245-01AT
 #define TABLE_LEN       10
-/*
+
+// ROTARY & SCREW
 static float motor_table[TABLE_LEN][2] = {
   // {SPEED, DUTY}
   {0, 0.05},
@@ -17,7 +18,8 @@ static float motor_table[TABLE_LEN][2] = {
   {1500, 0.4},
   {2000, 0.55},
 };
-*/
+
+/*
 static float motor_table[TABLE_LEN][2] = {
   // {SPEED, DUTY}
   {0, 0.2},
@@ -31,5 +33,6 @@ static float motor_table[TABLE_LEN][2] = {
   {1500, 1.6},
   {2000, 2.0},
 };
+*/
 
 #endif

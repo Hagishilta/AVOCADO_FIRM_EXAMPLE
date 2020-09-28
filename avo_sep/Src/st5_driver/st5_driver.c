@@ -87,7 +87,7 @@ void ST5_getPWM(float pwmDuty[5]){
   
   uint8_t* pinValue = step5Value[st5_step];
   
-  ST5_interPolate(st5_speed); // Calculate proper duty
+  ST5_interPolate((int32_t)st5_speed); // Calculate proper duty
   
   pwmDuty[0] = pinValue[0] ? st5_duty : 0; // A
   pwmDuty[1] = pinValue[1] ? st5_duty : 0; // B

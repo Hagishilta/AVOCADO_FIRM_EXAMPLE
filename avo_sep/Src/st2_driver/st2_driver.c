@@ -80,7 +80,7 @@ void ST2_getPWM(float pwmDuty[4]){
   
   uint8_t* pinValue = step2Value[st2_step];
   
-  ST2_interPolate(st2_speed); // Calculate proper duty
+  ST2_interPolate((int32_t)st2_speed); // Calculate proper duty
   
   pwmDuty[0] = pinValue[0] ? st2_duty : 0; // A+
   pwmDuty[1] = pinValue[1] ? st2_duty : 0; // B+

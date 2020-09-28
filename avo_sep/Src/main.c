@@ -82,8 +82,8 @@ static void MX_USART2_UART_Init(void);
 // Check Dispenser Type
 #define TEST 0
 #define SAUCE 0
-#define SCREW 0
-#define ROTARY 1
+#define SCREW 1
+#define ROTARY 0
 
 
 
@@ -103,11 +103,11 @@ uint8_t inputval[8];
 
 
 // START Screw
-#define POSITION_SHUTTER 1200
-#define WEIGHT_SCREW_1 200
+#define SCREW_SHUTTER_AMOUNT 1200
+#define SCREW_WEIGHT_1 200
 
 bool screw_shutter_home_sensor(){
-  if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) == GPIO_PIN_SET){
+  if(HAL_GPIO_ReadPin(inputPort[2], inputPin[2]) == GPIO_PIN_SET){
     return true;
   }
   else{
@@ -116,25 +116,25 @@ bool screw_shutter_home_sensor(){
 }
 
 bool screw_bowl_sensor(){
-  if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET){
-    return true;
+  if(HAL_GPIO_ReadPin(inputPort[3], inputPin[3]) == GPIO_PIN_SET){
+    return false;
   }
   else{
-    return false;
+    return true;
   }
 }
 
 bool screw_button_manual(){
-  if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4) == GPIO_PIN_SET){
-    return true;
+  if(HAL_GPIO_ReadPin(inputPort[0], inputPin[0]) == GPIO_PIN_SET){
+    return false;
   }
   else{
-    return false;
+    return true;
   }
 }
 
 bool screw_button_mode(){
-  if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_6) == GPIO_PIN_SET){
+  if(HAL_GPIO_ReadPin(inputPort[1], inputPin[1]) == GPIO_PIN_SET){
     return true;
   }
   else{
@@ -418,8 +418,8 @@ bool parse_casData(){
 // START Motor - DC
 #define MOTOR_SPEED_2_SAUCE 800
 #define MOTOR_SPEED_5_SAUCE 800
-#define MOTOR_SPEED_2_SCREW 800
-#define MOTOR_SPEED_5_SCREW 800
+#define MOTOR_SPEED_2_SCREW 700
+#define MOTOR_SPEED_5_SCREW 700
 #define MOTOR_SPEED_2_ROTARY 700
 #define MOTOR_SPEED_5_ROTARY 300
 #define MOTOR_FREQUENCY_2 20000
@@ -467,19 +467,23 @@ uint8_t current_mode_test;
 uint8_t button_mode_sauce[2];
 uint8_t button_mode_screw;
 uint8_t button_mode_rotary;
-uint8_t current_state_sauce;    // READY/DISPENSING_DONE(0) LOADING(1) LOADING_DONE(2) DISPENSING(3)
-uint8_t current_state_screw;    // READY/DISPENSING_DONE(0) LOADING(1) LOADING_DONE(2) DISPENSING(3)
-
-uint8_t current_state_rotary;   // (READY/DISASSEMBLE)(0) AUTO(1) MANUAL(2) MANUAL_DISPENSING(3))
+uint8_t current_state_sauce;    // READY/DISPENSING_DONE(0) LOADING(1) LOADING_DONE(2) DISPENSING(3) MANUAL(4) MANUAL_DISPENSING(5)
+uint8_t current_state_screw;    // READY/DISPENSING_DONE(0) LOADING(1) LOADING_DONE(2) DISPENSING(3) MANUAL(4) MANUAL_DISPENSING(5)
+uint8_t current_state_rotary;   // (READY/DISASSEMBLE)(0) AUTO(1) MANUAL(2) MANUAL_DISPENSING(3)
 
 uint8_t cnt_piston_home;
 uint8_t cnt_state;
+uint8_t cnt_2hz;
 uint8_t cnt_pi_communication;
 uint16_t my_cnt;
 
 // local variables
 uint8_t cnt_rotary_manual;
+uint8_t cnt_screw_manual;
+
 uint8_t cnt_rotary_bowl_sensor;
+uint8_t cnt_screw_shutter_home_sensor;
+uint8_t cnt_screw_bowl_sensor;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   if(htim == &htim2){
@@ -520,8 +524,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
     if(TEST == 1){
       // do nothing.
     }
-    /*
+    
     else if(SAUCE == 1){
+      /*
       // Sauce - Piston Cylinder Home Position
       if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4) == GPIO_PIN_RESET){
         cnt_piston_home++;
@@ -571,50 +576,90 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
         current_mode = 0;
         // return;
       }
-
+*/
     }
-    */
+    
     else if(SCREW == 1){
-      // Selector Switch - Mode change
+      // mode switch
       if(screw_button_mode()){
+        if(button_mode_screw >= 255){
+          button_mode_screw = 1;
+        }
         button_mode_screw++;
       }
       else{
         button_mode_screw = 0;
       }
-      /*
-      // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-      if(button_mode_screw[0] >= 100 && button_mode_screw[1] >= 100){
-        // STOP/DISASSEMBLE(0)
-        current_mode_screw = 0;
-      }
-      else if(button_mode_screw[0] >= 100 && button_mode_screw[1] < 10){
-        // AUTO(1)
-        current_mode_screw = 1;
-      }
-      else if(button_mode_screw[0] < 10 && button_mode_screw[1] >= 100){
-        // MANUAL(2)
-        current_mode_screw = 2;
+      
+      // manual dispensing button
+      if(screw_button_manual()){
+        if(cnt_screw_manual >= 255){
+          cnt_screw_manual = 1;
+        }
+        cnt_screw_manual++;
       }
       else{
-        // error - STOP(0)
-        current_mode_screw = 0;
-        // return;
+        cnt_screw_manual = 0;
       }
-*/
+      
+      // screw shutter home sensor
+      if(screw_shutter_home_sensor()){
+        if(cnt_screw_shutter_home_sensor >= 255){
+          cnt_screw_shutter_home_sensor = 1;
+        }
+        cnt_screw_shutter_home_sensor++;
+      }
+      else{
+        cnt_screw_shutter_home_sensor = 0;
+      }
+      
+      // If not permissive, don't start : Check bowl sensor
+      if(screw_bowl_sensor()){
+        if(cnt_screw_bowl_sensor >= 255){
+          cnt_screw_bowl_sensor = 1;
+        }
+        cnt_screw_bowl_sensor++;
+      }
+      else{
+        cnt_screw_bowl_sensor = 0;
+      }
+      
+      // State : READY/DISPENSING_DONE(0) AUTO (1) LOADING(2) LOADING_DONE(3) DISPENSING(4) MANUAL(5) MANUAL_DISPENSING(6)
+      if(button_mode_screw > 0 && (current_state_screw == 0 || current_state_screw == 5)){
+        // AUTO(1)
+        current_state_screw = 1;
+      }
+      else if(button_mode_screw <= 0){
+        if(cnt_screw_bowl_sensor > 0 && cnt_screw_manual > 0){
+          // MANUAL_DISPENSING(6)
+          current_state_screw = 6;
+        }
+        else{
+          // MANUAL(5)
+          current_state_screw = 5;
+        }
+      }
+
     
     }
     
     else if(ROTARY == 1){
+      // mode switch
       if(rotary_button_mode()){
+        if(button_mode_rotary >= 255){
+          button_mode_rotary = 1;
+        }
         button_mode_rotary++;
       }
       else{
         button_mode_rotary = 0;
       }
       
-      // manual dispensing state
+      // manual dispensing button
       if(rotary_button_manual()){
+        if(cnt_rotary_manual >= 255){
+          cnt_rotary_manual = 1;
+        }
         cnt_rotary_manual++;
       }
       else{
@@ -623,6 +668,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
       // If not permissive, don't start : Check bowl sensor
       if(rotary_bowl_sensor()){
+        if(cnt_rotary_bowl_sensor >= 255){
+          cnt_rotary_bowl_sensor = 1;
+        }
         cnt_rotary_bowl_sensor++;
       }
       else{
@@ -649,21 +697,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
     // 2Hz communication with raspberry pi
     cnt_pi_communication++;
-    if(cnt_pi_communication > 10000){
-      if(SAUCE == 1){
-        txBuffer[0] = current_state_sauce + '0';
+    if(cnt_pi_communication > 100){
+      cnt_2hz++;
+      if(cnt_2hz > 100){
+        if(SAUCE == 1){
+          txBuffer[0] = current_state_sauce + '0';
+        }
+        else if(SCREW == 1){
+          txBuffer[0] = current_state_screw + '0';
+        }
+        else if(ROTARY == 1){
+          txBuffer[0] = current_state_rotary + '0';
+        }
+        txBuffer[1] = '\n';
+        HAL_UART_Transmit(&huart4, txBuffer, sizeof(txBuffer), 1000);
+        cnt_2hz = 0;
       }
-      else if(SCREW == 1){
-        txBuffer[0] = current_state_screw + '0';
-      }
-      else if(ROTARY == 1){
-        txBuffer[0] = current_state_rotary + '0';
-      }
-      txBuffer[1] = '\n';
-      HAL_UART_Transmit(&huart4, txBuffer, sizeof(txBuffer), 1000);
       cnt_pi_communication = 0;
     }
-    
     my_cnt = TIM2->CNT;
     
   }
@@ -674,6 +725,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 // local variables
 uint8_t my_variables;
 float rotary_initial_weight;
+int32_t screw_initial_position;
+float screw_initial_weight;
+uint8_t screw_loading_amount;
+bool screw_loading_repeat;
 
 /* USER CODE END 0 */
 
@@ -752,7 +807,7 @@ int main(void)
   if(SAUCE == 1){
     st2.speed = MOTOR_SPEED_2_SAUCE;
     st5.speed = MOTOR_SPEED_5_SAUCE;
-    current_state_screw = 0;    // Set initial state
+    current_state_sauce = 0;    // Set initial state
     /*
     while(1){
       HAL_Delay(1000);
@@ -766,6 +821,17 @@ int main(void)
     st2.speed = MOTOR_SPEED_2_SCREW;
     st5.speed = MOTOR_SPEED_5_SCREW;
     current_state_screw = 0;    // Set initial state
+    st2.input_cnt = -100000;    // START homing
+    while(cnt_screw_shutter_home_sensor <= 10){
+      // wait
+    }
+    // STOP when shutter is home
+    st2.speed = 0;
+    HAL_Delay(1);
+    st2.input_cnt = st2.current_cnt;
+    HAL_Delay(1);
+    st2.speed = MOTOR_SPEED_2_SCREW;
+    screw_initial_position = st2.current_cnt;     // Assume st2.current_cnt < 0
   }
   else if(ROTARY == 1){
     st2.speed = MOTOR_SPEED_2_ROTARY;
@@ -919,7 +985,133 @@ int main(void)
     }   // END of SAUCE
 
     else if(SCREW == 1){
-
+      // State : READY/DISPENSING_DONE(0) AUTO (1) LOADING(2) LOADING_DONE(3) DISPENSING(4) MANUAL(5) MANUAL_DISPENSING(6)
+      // READY/DISPENSING_DONE(0)
+      if(current_state_screw == 0){
+        // do nothing.
+      }
+      // AUTO (1)
+      else if(current_state_screw == 1){
+        if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
+          // HALF, NORMAL, ONEHALF
+          if(rxBuffer == '1'){
+            // HALF
+            screw_loading_amount = 1;
+          }
+          else if(rxBuffer == '2'){
+            // NORMAL
+            screw_loading_amount = 2;
+          }
+          else if(rxBuffer == '3'){
+            // ONEHALF
+            screw_loading_amount = 2;
+            screw_loading_repeat = true;
+          }
+          
+          // If not permissive, Ready position.
+          while(current_state_screw == 1 && !screw_shutter_home_sensor()){
+            HAL_Delay(100);
+          }
+          
+          // Bowl waiting delay
+          HAL_Delay(1000);
+          
+          current_state_screw = 2;
+        }
+      }
+      // LOADING(2)
+      else if(current_state_screw == 2){
+        if(screw_loading_amount == 1){
+          // HALF
+          // SCRREW DISPENSING START
+          screw_initial_weight = m_casData.data;  // m_casData.data >= 0
+          st5.input_cnt = st5.input_cnt + 10000000;
+          while(m_casData.data >= screw_initial_weight + SCREW_WEIGHT_1/2){
+            HAL_Delay(20);
+          }
+          st5.speed = 0;
+          HAL_Delay(10);
+          st5.input_cnt = st5.current_cnt;
+          HAL_Delay(10);
+          st5.speed = MOTOR_SPEED_5_ROTARY;
+          // SCRREW DISPENSING END
+        }
+        else if(screw_loading_amount == 2){
+          // NORMAL
+          // SCRREW DISPENSING START
+          screw_initial_weight = m_casData.data;  // m_casData.data >= 0
+          st5.input_cnt = st5.input_cnt + 10000000;
+          while(m_casData.data >= screw_initial_weight + SCREW_WEIGHT_1){
+            HAL_Delay(20);
+          }
+          st5.speed = 0;
+          HAL_Delay(10);
+          st5.input_cnt = st5.current_cnt;
+          HAL_Delay(10);
+          st5.speed = MOTOR_SPEED_5_ROTARY;
+          // SCRREW DISPENSING END
+        }
+        else{
+          // ERROR
+        }
+        
+        current_state_screw = 3;
+      }
+      // LOADING_DONE(3)
+      else if(current_state_screw == 3){
+        while(!screw_bowl_sensor()){
+          HAL_Delay(50);
+        }
+        
+        current_state_screw = 4;
+      }
+      // DISPENSING(4)
+      else if(current_state_screw == 4){
+        
+        
+        if(screw_loading_repeat){
+          // 2nd loading
+          current_state_screw = 2;
+        }
+        else{
+          current_state_screw = 1;
+        }
+      }
+      // MANUAL(5)
+      else if(current_state_screw == 5){
+        // STOP screw
+        st5.speed = 0;
+        HAL_Delay(10);
+        st5.input_cnt = st5.current_cnt;
+        HAL_Delay(10);
+        st5.speed = MOTOR_SPEED_5_SCREW;
+        st5.current_cnt = screw_initial_position;
+        
+        // CLOSE shutter
+        st2.input_cnt = screw_initial_position;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);        // Why do we need this...?
+        }
+      }
+      // MANUAL_DISPENSING(6)
+      else if(current_state_screw == 6){
+        // OPEN shutter
+        st2.input_cnt = screw_initial_position + SCREW_SHUTTER_AMOUNT;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+        }
+        
+        // RUN screw
+        // TODO : FIX integer limit bug
+        st5.input_cnt = st5.input_cnt + SCREW_SHUTTER_AMOUNT;
+//        if(st5.input_cnt < 2147483648){
+//          st5.input_cnt = st5.input_cnt + SCREW_SHUTTER_AMOUNT;
+//        }
+//        else{
+//          st5.current_cnt = screw_initial_position + SCREW_SHUTTER_AMOUNT;
+//        }
+      }
+      
     }   // END of SCREW
     
     else if(ROTARY == 1){
@@ -970,11 +1162,11 @@ int main(void)
         HAL_Delay(50);
         st2.input_cnt = st2.current_cnt;
         HAL_Delay(50);
-        st2.speed = MOTOR_SPEED_2_ROTARY;       
+        st2.speed = MOTOR_SPEED_2_ROTARY;
       }
       // Mode : MANUAL_DISPENSING(3)
       else if(current_state_rotary == 3){
-        st2.input_cnt = st2.input_cnt + 10 * ROTARY_AMOUNT;
+        st2.input_cnt = st2.input_cnt + 5 * ROTARY_AMOUNT;
       }
       
         
@@ -1159,20 +1351,8 @@ int main(void)
         
       }
       else if(rxBuffer == '3'){
-        for(j=0; j<8; ++j){
-          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_SET);
-          HAL_Delay(200);
-          //hal_gpio_writepin(gpioe, gpio_pin_0, gpio_pin_set); // led
-          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);   // BUZZER
-        }
       }
       else if(rxBuffer == '4'){
-        for(j=0; j<8; ++j){
-          HAL_GPIO_WritePin(outputPort[j], outputPin[j], GPIO_PIN_RESET);
-          HAL_Delay(200);
-          //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // LED
-          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);   // BUZZER
-        }
       }
       else if(rxBuffer == '5'){
         

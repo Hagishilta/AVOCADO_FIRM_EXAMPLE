@@ -146,24 +146,24 @@ bool screw_button_mode(){
 
 
 // START Rotary
-#define ROTARY_AMOUNT 180
+#define ROTARY_AMOUNT 250
 #define ROTARY_WEIGHT 9
 
 bool rotary_bowl_sensor(){
   if(HAL_GPIO_ReadPin(inputPort[3], inputPin[3]) == GPIO_PIN_SET){
-    return true;
+    return false;
   }
   else{
-    return false;
+    return true;
   }
 }
 
 bool rotary_button_manual(){
   if(HAL_GPIO_ReadPin(inputPort[1], inputPin[1]) == GPIO_PIN_SET){
-    return true;
+    return false;
   }
   else{
-    return false;
+    return true;
   }
 }
 
@@ -463,7 +463,7 @@ uint8_t current_mode_test;
 
 uint8_t current_mode_sauce;
 uint8_t current_mode_screw;
-uint8_t current_mode_rotary;
+uint8_t current_mode_rotary;        // AUTO START
 uint8_t button_mode_sauce[2];
 uint8_t button_mode_screw;
 uint8_t button_mode_rotary;
@@ -608,8 +608,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
         button_mode_rotary = 0;
       }
       
-      // Mode : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-      if(button_mode_rotary >= 10){
+      // Mode : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2) MANUAL_DISPENSING(3)
+      if(button_mode_rotary > 0){
         // AUTO(1)
         current_mode_rotary = 1;
       }
@@ -644,6 +644,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 
 
+// local variables
+uint8_t cnt_rotary_manual;
+uint8_t rotary_manual_state;
 
 
 /* USER CODE END 0 */
@@ -654,7 +657,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */  
 
   /* USER CODE END 1 */
 
@@ -733,7 +736,7 @@ int main(void)
     st5.speed = MOTOR_SPEED_5_ROTARY;
   }
   
-  
+  current_mode_rotary = 1;
   common_power_alert_led(true);
   
   /*
@@ -916,7 +919,7 @@ int main(void)
             
             //If not permissive, Hold & Buzzer ON & Alert LED ON.
             bool flag = true;
-            while(current_mode_rotary == 1 && rotary_bowl_sensor()){
+            while(current_mode_rotary == 1 && !rotary_bowl_sensor()){
               common_power_alert_led(flag);
               common_buzzer_sound(flag);      // buzzer NOT working now
               flag = !flag;
@@ -928,7 +931,7 @@ int main(void)
             
             // ROTARY DISPENSING
             uint8_t initial_weight = m_casData.data;
-            while(m_casData.data + ROTARY_WEIGHT >= initial_weight){
+            while(((uint8_t)m_casData.data + ROTARY_WEIGHT) >= initial_weight){
               // clockwise rotation
               st2.input_cnt = st2.input_cnt + ROTARY_AMOUNT;
               while(st2.input_cnt != st2.current_cnt){
@@ -950,6 +953,7 @@ int main(void)
       }
       // Mode : MANUAL(2)
       else if(current_mode_rotary == 2){
+        
         // Check bowl sensor
         uint8_t rotary_bowl_sensor_cnt = 0;
         while(true){
@@ -962,28 +966,40 @@ int main(void)
         }
         
         // Manual Button Pressing
-        float dispensing_amount = ROTARY_AMOUNT;
-        uint8_t cnt_rotary_manual = 0;
+        cnt_rotary_manual = 0;
+        rotary_manual_state = 0;        // 0 stop 1 dispensing 
+//        bool is_running = false;
         while(1){
           if(rotary_button_manual()){
-            // ROTARY DISPENSING
-            st2.input_cnt = st2.input_cnt + dispensing_amount;
             cnt_rotary_manual++;
-            if(cnt_rotary_manual > 100){
-              dispensing_amount *= -1;
-            }
           }
           else{
+            cnt_rotary_manual = 0;
+          }
+          
+          if(cnt_rotary_manual > 10){
+            rotary_manual_state = 1;
+          }
+          else{
+            rotary_manual_state = 0;
+          }
+          
+          // ROTARY DISPENSING          
+          if(rotary_manual_state == 1){
+            st2.input_cnt = st2.input_cnt + ROTARY_AMOUNT;
+          }
+          else if(rotary_manual_state == 0){
             // ROTARY STOP
             st2.speed = 0;
-            st2.current_cnt = st2.input_cnt;
+            HAL_Delay(50);
+            st2.input_cnt = st2.current_cnt;
+            HAL_Delay(50);
             st2.speed = MOTOR_SPEED_2_ROTARY;
           }
           HAL_Delay(50);
         }
         
       }
-      
       
     
       

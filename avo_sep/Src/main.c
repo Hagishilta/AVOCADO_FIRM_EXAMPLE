@@ -105,6 +105,7 @@ uint8_t inputval[8];
 // START Screw
 #define SCREW_SHUTTER_AMOUNT 1200
 #define SCREW_WEIGHT_1 200
+#define SCREW_WEIGHT_BELOW 30
 
 bool screw_shutter_home_sensor(){
   if(HAL_GPIO_ReadPin(inputPort[2], inputPin[2]) == GPIO_PIN_SET){
@@ -992,41 +993,52 @@ int main(void)
       }
       // AUTO (1)
       else if(current_state_screw == 1){
+        // Trigger from KMS
         if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
           // HALF, NORMAL, ONEHALF
           if(rxBuffer == '1'){
             // HALF
             screw_loading_amount = 1;
+            screw_loading_repeat = false;
           }
           else if(rxBuffer == '2'){
             // NORMAL
             screw_loading_amount = 2;
+            screw_loading_repeat = false;
           }
           else if(rxBuffer == '3'){
             // ONEHALF
             screw_loading_amount = 2;
             screw_loading_repeat = true;
           }
-          
-          // If not permissive, Ready position.
-          while(current_state_screw == 1 && !screw_shutter_home_sensor()){
-            HAL_Delay(100);
+          else{
+            screw_loading_amount = 0;
           }
-          
-          // Bowl waiting delay
-          HAL_Delay(1000);
-          
-          current_state_screw = 2;
+          if(screw_loading_amount > 0){
+            // If not permissive, Ready position.
+            while(current_state_screw == 1 && !screw_shutter_home_sensor()){
+              HAL_Delay(100);
+            }
+            
+            // Bowl waiting delay
+            HAL_Delay(1000);
+            
+            current_state_screw = 2;
+          }
         }
       }
       // LOADING(2)
       else if(current_state_screw == 2){
+        HAL_Delay(1000);        // wait before start
         if(screw_loading_amount == 1){
           // HALF
           // SCRREW DISPENSING START
           screw_initial_weight = m_casData.data;  // m_casData.data >= 0
           st5.input_cnt = st5.input_cnt + 10000000;
-          while(m_casData.data >= screw_initial_weight + SCREW_WEIGHT_1/2){
+          while(m_casData.data < screw_initial_weight + SCREW_WEIGHT_1/2){
+            if(current_state_screw != 2){
+              break;
+            }
             HAL_Delay(20);
           }
           st5.speed = 0;
@@ -1041,8 +1053,11 @@ int main(void)
           // SCRREW DISPENSING START
           screw_initial_weight = m_casData.data;  // m_casData.data >= 0
           st5.input_cnt = st5.input_cnt + 10000000;
-          while(m_casData.data >= screw_initial_weight + SCREW_WEIGHT_1){
-            HAL_Delay(20);
+          while(m_casData.data < screw_initial_weight + SCREW_WEIGHT_1){
+            if(current_state_screw != 2){
+              break;
+            }
+            HAL_Delay(20);            
           }
           st5.speed = 0;
           HAL_Delay(10);
@@ -1059,18 +1074,50 @@ int main(void)
       }
       // LOADING_DONE(3)
       else if(current_state_screw == 3){
-        while(!screw_bowl_sensor()){
-          HAL_Delay(50);
+        // Trigger from KMS
+        if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
+          if(rxBuffer == 'q'){
+            // If not permissive, Hold & Buzzer ON & Alert LED ON.
+            bool flag = true;
+            while(!screw_bowl_sensor()){
+              common_power_alert_led(flag);
+              common_buzzer_sound(flag);      // buzzer NOT working now
+              flag = !flag;
+              HAL_Delay(500);
+            }
+            // RESET LED & BUZZER
+            common_power_alert_led(true);
+            common_buzzer_sound(false);
+            
+            current_state_screw = 4;
+          }
         }
-        
-        current_state_screw = 4;
       }
       // DISPENSING(4)
       else if(current_state_screw == 4){
+        // OPEN shutter
+        st2.input_cnt = screw_initial_position + SCREW_SHUTTER_AMOUNT;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+        }
         
+        while(m_casData.data > SCREW_WEIGHT_BELOW){
+          HAL_Delay(20);
+        }
+        HAL_Delay(2000);    // Stay 2 more seconds
+        screw_loading_amount = 0;
+        
+        // CLOSE shutter
+        st2.input_cnt = screw_initial_position;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);        // Why do we need this...?
+        }
         
         if(screw_loading_repeat){
           // 2nd loading
+          screw_loading_repeat = false;
+          screw_loading_amount = 1;
+          HAL_Delay(100);
           current_state_screw = 2;
         }
         else{
@@ -1080,12 +1127,14 @@ int main(void)
       // MANUAL(5)
       else if(current_state_screw == 5){
         // STOP screw
-        st5.speed = 0;
-        HAL_Delay(10);
-        st5.input_cnt = st5.current_cnt;
-        HAL_Delay(10);
-        st5.speed = MOTOR_SPEED_5_SCREW;
-        st5.current_cnt = screw_initial_position;
+        if(st5.input_cnt != st5.current_cnt){
+          st5.speed = 0;
+          HAL_Delay(10);
+          st5.input_cnt = st5.current_cnt;
+          HAL_Delay(10);
+          st5.speed = MOTOR_SPEED_5_SCREW;
+          st5.current_cnt = screw_initial_position;
+        }
         
         // CLOSE shutter
         st2.input_cnt = screw_initial_position;

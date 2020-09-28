@@ -146,7 +146,7 @@ bool screw_button_mode(){
 
 
 // START Rotary
-#define ROTARY_AMOUNT 250
+#define ROTARY_AMOUNT 700
 #define ROTARY_WEIGHT 9
 
 bool rotary_bowl_sensor(){
@@ -420,7 +420,7 @@ bool parse_casData(){
 #define MOTOR_SPEED_5_SAUCE 800
 #define MOTOR_SPEED_2_SCREW 800
 #define MOTOR_SPEED_5_SCREW 800
-#define MOTOR_SPEED_2_ROTARY 300
+#define MOTOR_SPEED_2_ROTARY 700
 #define MOTOR_SPEED_5_ROTARY 300
 #define MOTOR_FREQUENCY_2 20000
 #define MOTOR_FREQUENCY_5 20000
@@ -461,20 +461,25 @@ uint8_t rxBuffer;
 // Mode : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
 uint8_t current_mode_test;
 
-uint8_t current_mode_sauce;
-uint8_t current_mode_screw;
-uint8_t current_mode_rotary;        // AUTO START
+//uint8_t current_mode_sauce;
+//uint8_t current_mode_screw;
+//uint8_t current_mode_rotary;        // AUTO START
 uint8_t button_mode_sauce[2];
 uint8_t button_mode_screw;
 uint8_t button_mode_rotary;
 uint8_t current_state_sauce;    // READY/DISPENSING_DONE(0) LOADING(1) LOADING_DONE(2) DISPENSING(3)
 uint8_t current_state_screw;    // READY/DISPENSING_DONE(0) LOADING(1) LOADING_DONE(2) DISPENSING(3)
-uint8_t current_state_rotary;   // READY(0) DISPENSING(1)
+
+uint8_t current_state_rotary;   // (READY/DISASSEMBLE)(0) AUTO(1) MANUAL(2) MANUAL_DISPENSING(3))
 
 uint8_t cnt_piston_home;
 uint8_t cnt_state;
 uint8_t cnt_pi_communication;
 uint16_t my_cnt;
+
+// local variables
+uint8_t cnt_rotary_manual;
+uint8_t cnt_rotary_bowl_sensor;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   if(htim == &htim2){
@@ -608,15 +613,38 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
         button_mode_rotary = 0;
       }
       
-      // Mode : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2) MANUAL_DISPENSING(3)
-      if(button_mode_rotary > 0){
-        // AUTO(1)
-        current_mode_rotary = 1;
+      // manual dispensing state
+      if(rotary_button_manual()){
+        cnt_rotary_manual++;
       }
       else{
-        // MANUAL(2)
-        current_mode_rotary = 2;
+        cnt_rotary_manual = 0;
       }
+
+      // If not permissive, don't start : Check bowl sensor
+      if(rotary_bowl_sensor()){
+        cnt_rotary_bowl_sensor++;
+      }
+      else{
+        cnt_rotary_bowl_sensor = 0;
+      }
+      
+      // State : (STOP/DISASSEMBLE)(0) AUTO(1) MANUAL(2) MANUAL_DISPENSING(3)
+      if(button_mode_rotary > 0){
+        // AUTO(1)
+        current_state_rotary = 1;
+      }
+      else{
+        if(cnt_rotary_manual > 0 && cnt_rotary_bowl_sensor > 0){
+          // MANUAL_DISPENSING(3)
+          current_state_rotary = 3;
+        }
+        else{
+          // MANUAL(2)
+          current_state_rotary = 2;
+        }
+      }
+      
     }
 
     // 2Hz communication with raspberry pi
@@ -643,11 +671,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 // END Callback
 
 
-
 // local variables
-uint8_t cnt_rotary_manual;
-uint8_t rotary_manual_state;
-
+uint8_t my_variables;
+float rotary_initial_weight;
 
 /* USER CODE END 0 */
 
@@ -726,17 +752,27 @@ int main(void)
   if(SAUCE == 1){
     st2.speed = MOTOR_SPEED_2_SAUCE;
     st5.speed = MOTOR_SPEED_5_SAUCE;
+    current_state_screw = 0;    // Set initial state
+    /*
+    while(1){
+      HAL_Delay(1000);
+      if(current_mode == 0){
+        break;
+      }
+    }
+*/
   }
   else if(SCREW == 1){
     st2.speed = MOTOR_SPEED_2_SCREW;
     st5.speed = MOTOR_SPEED_5_SCREW;
+    current_state_screw = 0;    // Set initial state
   }
   else if(ROTARY == 1){
     st2.speed = MOTOR_SPEED_2_ROTARY;
     st5.speed = MOTOR_SPEED_5_ROTARY;
+    current_state_rotary = 1;   // Set initial state
   }
   
-  current_mode_rotary = 1;
   common_power_alert_led(true);
   
   /*
@@ -766,26 +802,7 @@ int main(void)
   }*/
 
 
-  
-  
-  // Check Mode : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-  if(SAUCE == 1){
-    /*
-    while(1){
-      HAL_Delay(1000);
-      if(current_mode == 0){
-        break;
-      }
-    }
-*/
-  }
-  else if(SCREW == 1){
-  }
-  else if(ROTARY == 1){
-    // do nothing.
-  }
-  
-  
+ 
   /*
   // Double check AUTO(1) mode
   if(current_mode == 1){
@@ -898,28 +915,21 @@ int main(void)
       else{
         // Error : Unavailable Current State
       }
-    }
+      
+    }   // END of SAUCE
 
     else if(SCREW == 1){
 
-    }
+    }   // END of SCREW
+    
     else if(ROTARY == 1){
       // Mode : AUTO(1)
-      if(current_mode_rotary == 1){
+      if(current_state_rotary == 1){
         if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
-  //        // State : READY(0) DISPENSING(1)
-  //        if(current_state_rotary == 0){
-  //          // READY
-  //        }
-  //        else if(current_state_rotary == 1){
-  //          // DISPENSING
-  //        }
-          
           if(rxBuffer == '0'){
-            
             //If not permissive, Hold & Buzzer ON & Alert LED ON.
             bool flag = true;
-            while(current_mode_rotary == 1 && !rotary_bowl_sensor()){
+            while(current_state_rotary == 1 && !rotary_bowl_sensor()){
               common_power_alert_led(flag);
               common_buzzer_sound(flag);      // buzzer NOT working now
               flag = !flag;
@@ -929,9 +939,9 @@ int main(void)
             // Bowl waiting delay
             HAL_Delay(1000);
             
-            // ROTARY DISPENSING
-            uint8_t initial_weight = m_casData.data;
-            while(((uint8_t)m_casData.data + ROTARY_WEIGHT) >= initial_weight){
+            // ROTARY DISPENSING START
+            rotary_initial_weight = m_casData.data;  // m_casData.data < 0
+            while((m_casData.data + ROTARY_WEIGHT) >= rotary_initial_weight){
               // clockwise rotation
               st2.input_cnt = st2.input_cnt + ROTARY_AMOUNT;
               while(st2.input_cnt != st2.current_cnt){
@@ -942,77 +952,37 @@ int main(void)
               while(st2.input_cnt != st2.current_cnt){
                 HAL_Delay(50);
               }
+              if(current_state_rotary != 1){
+                break;
+              }
             }
-            
+            // ROTARY DISPENSING END
           }
           else if(rxBuffer == '1'){
             // do nothing.
-            
           }
         }
       }
       // Mode : MANUAL(2)
-      else if(current_mode_rotary == 2){
-        
-        // Check bowl sensor
-        uint8_t rotary_bowl_sensor_cnt = 0;
-        while(true){
-          if(rotary_bowl_sensor()){
-            rotary_bowl_sensor_cnt++;
-          }
-          if(rotary_bowl_sensor_cnt > 100){
-            break;
-          }
-        }
-        
-        // Manual Button Pressing
-        cnt_rotary_manual = 0;
-        rotary_manual_state = 0;        // 0 stop 1 dispensing 
-//        bool is_running = false;
-        while(1){
-          if(rotary_button_manual()){
-            cnt_rotary_manual++;
-          }
-          else{
-            cnt_rotary_manual = 0;
-          }
-          
-          if(cnt_rotary_manual > 10){
-            rotary_manual_state = 1;
-          }
-          else{
-            rotary_manual_state = 0;
-          }
-          
-          // ROTARY DISPENSING          
-          if(rotary_manual_state == 1){
-            st2.input_cnt = st2.input_cnt + ROTARY_AMOUNT;
-          }
-          else if(rotary_manual_state == 0){
-            // ROTARY STOP
-            st2.speed = 0;
-            HAL_Delay(50);
-            st2.input_cnt = st2.current_cnt;
-            HAL_Delay(50);
-            st2.speed = MOTOR_SPEED_2_ROTARY;
-          }
-          HAL_Delay(50);
-        }
-        
+      else if(current_state_rotary == 2){
+        // ROTARY STOP
+        st2.speed = 0;
+        HAL_Delay(50);
+        st2.input_cnt = st2.current_cnt;
+        HAL_Delay(50);
+        st2.speed = MOTOR_SPEED_2_ROTARY;       
+      }
+      // Mode : MANUAL_DISPENSING(3)
+      else if(current_state_rotary == 3){
+        st2.input_cnt = st2.input_cnt + 10 * ROTARY_AMOUNT;
       }
       
-    
-      
-      
-      
         
-    }
+    }   // END of ROTARY
     
+   
     
-    
-    
-    
-    /*
+    /* CAS TEST
     if(parse_casData()){
       if(m_casData.header1 == CAS_STABLE){
         HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);     // LED ON
@@ -1023,7 +993,7 @@ int main(void)
     }
     */
     
-    /*
+    /* DC MOTOR TEST
     if(m_casData.data <= -10){
       dc_speed_demand = 0.0f;
       while(1){
@@ -1068,8 +1038,7 @@ int main(void)
     }
     */
     
-    /*
-    // Board test code
+    /* Board test code 
     if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
       if(rxBuffer == '0'){
         st5.input_cnt = 1000;
@@ -1169,7 +1138,7 @@ int main(void)
     
     */
     
-    HAL_Delay(500);
+    HAL_Delay(50);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

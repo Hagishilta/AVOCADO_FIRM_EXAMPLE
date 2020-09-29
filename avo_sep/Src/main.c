@@ -181,59 +181,59 @@ bool rotary_button_mode(){
 
 
 // START Sauce
-#define POSITION_HALF 5000
-#define POSITION_NORMAL 10000
-#define POSITION_ONEHALF 15000
-#define POSITION_MAXIMUM 25000
-#define POSITION_DISASSEMBLE 100000
+#define POSITION_HALF 2500
+#define POSITION_NORMAL 4000
+#define POSITION_ONEHALF 5500
+#define POSITION_MAXIMUM 8000
+#define POSITION_DISASSEMBLE 9800
 
 void sauce_three_way_valve(bool n){
   if(n){
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(outputPort[0], outputPin[0], GPIO_PIN_SET);
   }
   else{
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(outputPort[0], outputPin[0], GPIO_PIN_RESET);
   }
 }
 
 void sauce_anti_drop_valve(bool n){
   if(n){
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(outputPort[1], outputPin[1], GPIO_PIN_SET);
   }
   else{
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(outputPort[1], outputPin[1], GPIO_PIN_RESET);
   }
 }
 
 bool sauce_piston_home_sensor(){
-  if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4) == GPIO_PIN_SET){
-    return true;
+  if(HAL_GPIO_ReadPin(inputPort[3], inputPin[3]) == GPIO_PIN_SET){
+    return false;
   }
   else{
-    return false;
+    return true;
   }
 }
 
 bool sauce_bowl_sensor(){
-  if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_6) == GPIO_PIN_SET){
-    return true;
+  if(HAL_GPIO_ReadPin(inputPort[4], inputPin[4]) == GPIO_PIN_SET){
+    return false;
   }
   else{
-    return false;
+    return true;
   }
 }
 
 bool sauce_button_manual(){
-  if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) == GPIO_PIN_SET){
-    return true;
+  if(HAL_GPIO_ReadPin(inputPort[0], inputPin[0]) == GPIO_PIN_SET){
+    return false;
   }
   else{
-    return false;
+    return true;
   }
 }
 
 bool sauce_button_mode_1(){
-  if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_SET){
+  if(HAL_GPIO_ReadPin(inputPort[1], inputPin[1]) == GPIO_PIN_SET){
     return true;
   }
   else{
@@ -242,7 +242,7 @@ bool sauce_button_mode_1(){
 }
 
 bool sauce_button_mode_2(){
-  if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6) == GPIO_PIN_SET){
+  if(HAL_GPIO_ReadPin(inputPort[2], inputPin[2]) == GPIO_PIN_SET){
     return true;
   }
   else{
@@ -468,12 +468,10 @@ uint8_t current_mode_test;
 uint8_t button_mode_sauce[2];
 uint8_t button_mode_screw;
 uint8_t button_mode_rotary;
-uint8_t current_state_sauce;    // READY/DISPENSING_DONE(0) LOADING(1) LOADING_DONE(2) DISPENSING(3) MANUAL(4) MANUAL_DISPENSING(5)
-uint8_t current_state_screw;    // READY/DISPENSING_DONE(0) AUTO (1) LOADING(2) LOADING_DONE(3) DISPENSING(4) MANUAL(5) MANUAL_DISPENSING(6)
+uint8_t current_state_sauce;    // DISASSEMBLE(0) AUTO(1) LOADING(2) LOADING_DONE(3) DISPENSING(4) MANUAL(5) MANUAL_DISPENSING(6)
+uint8_t current_state_screw;    // READY/DISPENSING_DONE(0) AUTO(1) LOADING(2) LOADING_DONE(3) DISPENSING(4) MANUAL(5) MANUAL_DISPENSING(6)
 uint8_t current_state_rotary;   // (READY/DISASSEMBLE)(0) AUTO(1) DISPENSING(2) MANUAL(3) MANUAL_DISPENSING(4)
 
-uint8_t cnt_piston_home;
-uint8_t cnt_state;
 uint8_t cnt_2hz;
 uint8_t cnt_pi_communication;
 uint16_t my_cnt;
@@ -481,10 +479,13 @@ uint16_t my_cnt;
 // local variables
 uint8_t cnt_rotary_manual;
 uint8_t cnt_screw_manual;
+uint8_t cnt_sauce_manual;
 
 uint8_t cnt_rotary_bowl_sensor;
 uint8_t cnt_screw_shutter_home_sensor;
 uint8_t cnt_screw_bowl_sensor;
+uint8_t cnt_sauce_bowl_sensor;
+uint8_t cnt_sauce_piston_home_sensor;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   if(htim == &htim2){
@@ -527,57 +528,81 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
     }
     
     else if(SAUCE == 1){
-      /*
-      // Sauce - Piston Cylinder Home Position
-      if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_4) == GPIO_PIN_RESET){
-        cnt_piston_home++;
+      // mode switch
+      if(sauce_button_mode_1()){
+        if(button_mode_sauce[0] >= 255){
+          button_mode_sauce[0] = 1;
+        }
+        button_mode_sauce[0]++;
       }
       else{
-        cnt_piston_home = 0;
+        button_mode_sauce[0] = 0;
       }
       
-      if(cnt_piston_home > 100){
-        if(current_mode > 0){
-          st2.speed = 0;
-          st2.current_cnt = st2.input_cnt;
+      if(sauce_button_mode_2()){
+        if(button_mode_sauce[1] >= 255){
+          button_mode_sauce[1] = 1;
+        }
+        button_mode_sauce[1]++;
+      }
+      else{
+        button_mode_sauce[1] = 0;
+      }
+      
+      // manual dispensing button
+      if(sauce_button_manual()){
+        if(cnt_sauce_manual >= 255){
+          cnt_sauce_manual = 1;
+        }
+        cnt_sauce_manual++;
+      }
+      else{
+        cnt_sauce_manual = 0;
+      }
+      
+      // sauce piston home sensor
+      if(sauce_piston_home_sensor()){
+        if(cnt_sauce_piston_home_sensor >= 255){
+          cnt_sauce_piston_home_sensor = 1;
+        }
+        cnt_sauce_piston_home_sensor++;
+      }
+      else{
+        cnt_sauce_piston_home_sensor = 0;
+      }
+      
+      // If not permissive, don't start : Check bowl sensor
+      if(sauce_bowl_sensor()){
+        if(cnt_sauce_bowl_sensor >= 255){
+          cnt_sauce_bowl_sensor = 1;
+        }
+        cnt_sauce_bowl_sensor++;
+      }
+      else{
+        cnt_sauce_bowl_sensor = 0;
+      }
+      
+      // State : DISASSEMBLE(0) AUTO (1) LOADING(2) LOADING_DONE(3) DISPENSING(4) MANUAL(5) MANUAL_DISPENSING(6)
+      if(button_mode_sauce[0] > 0 && button_mode_sauce[1] > 0 && (current_state_sauce == 1 || current_state_sauce == 5)){
+        // DISASSEMBLE(0)
+        current_state_sauce = 0;
+      }
+      else if(button_mode_sauce[0] > 0 && button_mode_sauce[1] <= 0 && current_state_sauce == 0){
+        // AUTO(1)
+        current_state_sauce = 1;
+      }
+      else if(button_mode_sauce[0] <= 0 && button_mode_sauce[1] > 0){
+        if(cnt_sauce_bowl_sensor > 0 && cnt_sauce_manual > 0){
+          // MANUAL_DISPENSING(6)
+          current_state_sauce = 6;
+        }
+        else{
+          // MANUAL(5)
+          current_state_sauce = 5;
         }
       }
       
       
-      // Selector Switch - Mode change
-      if(sauce_button_mode_1()){
-        button_mode[0]++;
-      }
-      else{
-        button_mode[0] = 0;
-      }
-      if(sauce_button_mode_2()){
-        button_mode[1]++;
-      }
-      else{
-        button_mode[1] = 0;
-      }
-      
-      
-      // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
-      if(button_mode[0] >= 100 && button_mode[1] >= 100){
-        // STOP/DISASSEMBLE(0)
-        current_mode = 0;
-      }
-      else if(button_mode[0] >= 100 && button_mode[1] < 10){
-        // AUTO(1)
-        current_mode = 1;
-      }
-      else if(button_mode[0] < 10 && button_mode[1] >= 100){
-        // MANUAL(2)
-        current_mode = 2;
-      }
-      else{
-        // error - STOP(0)
-        current_mode = 0;
-        // return;
-      }
-*/
     }
     
     else if(SCREW == 1){
@@ -731,6 +756,9 @@ float screw_initial_weight;
 uint8_t screw_loading_amount;
 bool screw_loading_repeat;
 
+uint8_t sauce_loading_amount;
+int32_t sauce_initial_position;
+
 /* USER CODE END 0 */
 
 /**
@@ -809,14 +837,24 @@ int main(void)
     st2.speed = MOTOR_SPEED_2_SAUCE;
     st5.speed = MOTOR_SPEED_5_SAUCE;
     current_state_sauce = 0;    // Set initial state
-    /*
-    while(1){
-      HAL_Delay(1000);
-      if(current_mode == 0){
-        break;
-      }
+    
+    // If not permissive, Ready position.
+    while(current_state_sauce != 1){
+      // wait until auto mode
+      HAL_Delay(10);
     }
-*/
+    st2.input_cnt = 100000;    // START homing
+    while(cnt_sauce_piston_home_sensor <= 10){
+      // wait
+      // HAL_Delay(10);
+    }
+    // STOP when piston is home
+    st2.speed = 0;
+    HAL_Delay(1);
+    st2.input_cnt = st2.current_cnt;
+    HAL_Delay(1);
+    st2.speed = MOTOR_SPEED_2_SAUCE;
+    sauce_initial_position = st2.current_cnt;
   }
   else if(SCREW == 1){
     st2.speed = MOTOR_SPEED_2_SCREW;
@@ -825,6 +863,7 @@ int main(void)
     st2.input_cnt = -100000;    // START homing
     while(cnt_screw_shutter_home_sensor <= 10){
       // wait
+      //HAL_Delay(10);
     }
     // STOP when shutter is home
     st2.speed = 0;
@@ -910,74 +949,177 @@ int main(void)
     
     
     else if(SAUCE == 1){
-      // State : STOP/DISASSEMBLE(0) AUTO(1) MANUAL(2)
+      // DISASSEMBLE(0)
       if(current_state_sauce == 0){
-        // STOP/DISASSEMBLE
+        // piston CLOSE
+        st2.input_cnt = sauce_initial_position;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+          if(current_state_sauce != 0){
+            break;
+          }
+        }
         
+        HAL_Delay(500); // need enough delay
+        
+        // 3way valve open
+        sauce_three_way_valve(true);
+        
+        // anti drop valve CLOSE
+        sauce_anti_drop_valve(false);
+        
+        // piston OPEN
+        st2.input_cnt = sauce_initial_position - POSITION_DISASSEMBLE;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+          if(current_state_sauce != 0){
+            break;
+          }
+        }
+        while(current_state_sauce == 0){
+          HAL_Delay(10);
+        }
       }
+      // AUTO(1)
       else if(current_state_sauce == 1){
         // AUTO (From KMS)
-        while(1){
-          break;
-        }
         if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
-          if(rxBuffer == '0'){
-            //
-          }
-          else if(rxBuffer == '1'){
-            // Pre-load
-            st2.input_cnt = POSITION_HALF;
-            
+          if(rxBuffer == '1'){
+            // HALF loading
+            sauce_loading_amount = 1;
           }
           else if(rxBuffer == '2'){
-            // Pre-load
+            // NORMAL loading
             // Piston Cylinder OPEN
-            st2.input_cnt = POSITION_NORMAL;
+            sauce_loading_amount = 2;
           }
           else if(rxBuffer == '3'){
-            // Pre-load
-            st2.input_cnt = POSITION_ONEHALF;
-            
+            // ONEHALF loading
+            sauce_loading_amount = 3;
           }
-          else if(rxBuffer == '4'){
-            // Pre-load
+          else{
+            // ERROR
+            sauce_loading_amount = 0;
           }
-          else if(rxBuffer == '5'){
-            // output
-            
-            // If not permissive, Hold & Buzzer ON & Alert LED ON.
+          
+          if(sauce_loading_amount > 0){
+            // If not permissive, Ready position.
             while(1){
+              if(current_state_sauce == 1){
+                break;
+              }
+              HAL_Delay(50);
             }
             
-            three_way_valve(false);
-            HAL_Delay(500);
-            anti_drop_valve(true);
-            HAL_Delay(500);
-            st2.input_cnt = POSITION_DISASSEMBLE;
-            while(st2.speed >= 5){
+            current_state_sauce = 2;
+          }
+          
+        }
+      }
+      // LOADING(2)
+      else if(current_state_sauce == 2){
+        HAL_Delay(500); // wait another 0.5 second
+        
+        if(sauce_loading_amount == 1){
+          st2.input_cnt = sauce_initial_position - POSITION_HALF;
+        }
+        else if(sauce_loading_amount == 2){
+          st2.input_cnt = sauce_initial_position - POSITION_NORMAL;
+        }
+        else if(sauce_loading_amount == 3){
+          st2.input_cnt = sauce_initial_position - POSITION_ONEHALF;
+        }
+        
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+        }
+        current_state_sauce = 3;
+      }
+      // LOADING_DONE(3)
+      else if(current_state_sauce == 3){
+        // Trigger from KMS
+        if(HAL_UART_Receive(&huart4, &rxBuffer, 1, 1000) == HAL_OK){
+          if(rxBuffer == 'q'){
+            // If not permissive, Hold & Buzzer ON & Alert LED ON.
+            bool flag = true;
+            while(current_state_sauce == 3 && !sauce_bowl_sensor()){
+              common_power_alert_led(flag);
+              common_buzzer_sound(flag);      // buzzer NOT working now
+              flag = !flag;
               HAL_Delay(500);
             }
-            anti_drop_valve(true);
-            HAL_Delay(500);
-            three_way_valve(false);
-          }
-          else if(rxBuffer == '6'){
-            //
+            // RESET LED & BUZZER
+            common_power_alert_led(true);
+            common_buzzer_sound(false);
             
-          }
-          else if(rxBuffer == 0x61){      // 'a'
-            
-          }
-          else if(rxBuffer == 0x62){      // 'b'
-            
-          }
-          else if(rxBuffer == '9'){
-            
+            current_state_sauce = 4;
           }
         }
       }
-      else if(current_state_sauce == 2){
-        // MANUAL
+      // DISPENSING(4)
+      else if(current_state_sauce == 4){
+        sauce_three_way_valve(false);
+        HAL_Delay(500);
+        sauce_anti_drop_valve(true);
+        HAL_Delay(500);
+        
+        st2.input_cnt = sauce_initial_position;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+        }
+        HAL_Delay(500);
+        sauce_anti_drop_valve(false);
+        HAL_Delay(50);
+        sauce_three_way_valve(true);
+        
+        current_state_sauce = 1;        // AUTO ready position
+      }
+      // MANUAL(5)
+      else if(current_state_sauce == 5){
+        // ready position
+        
+        // 3 way valve OPEN
+        sauce_three_way_valve(true);
+        
+        // anti drop valve CLOSE
+        sauce_anti_drop_valve(false);
+        
+        // piston CLOSE
+        st2.input_cnt = sauce_initial_position;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+        }
+      }
+      // MANUAL_DISPENSING(6)
+      else if(current_state_sauce == 6){
+        while(current_state_sauce == 6 && !sauce_bowl_sensor()){
+          HAL_Delay(10);
+        }
+        
+        // piston FULL OPEN
+        st2.input_cnt = sauce_initial_position - POSITION_MAXIMUM;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+        }
+        
+        // 3 way valve CLOSE
+        sauce_three_way_valve(false);
+        
+        // anti drop valve OPEN
+        sauce_anti_drop_valve(true);
+        
+        // piston CLOSE
+        st2.input_cnt = sauce_initial_position;
+        while(st2.input_cnt != st2.current_cnt){
+          HAL_Delay(10);
+        }
+        
+        // anti drop valve CLOSE
+        sauce_anti_drop_valve(false);
+        
+        // 3 way valve OPEN
+        sauce_three_way_valve(true);
+        
       }
       else{
         // Error : Unavailable Current State

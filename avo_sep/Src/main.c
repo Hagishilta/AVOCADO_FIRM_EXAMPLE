@@ -1528,7 +1528,30 @@ int main(void)
     
     */
     
+    /* NO DC motor at this time.
     HAL_Delay(50);
+    if(){
+    }
+    dc_speed_demand = 0.0f;
+      while(1){
+        dc_speed_demand = dc_speed_demand > 100.0f ? 100.0f : (dc_speed_demand < -100.0f ? -100.0f : dc_speed_demand);
+        dc_speed_command = dc_speed_command * 0.99f + dc_speed_demand * 0.01f;
+        
+        pwm_duty = (uint16_t)((float)htim12.Instance->ARR * dc_speed_command / 100.0f);
+        if(pwm_duty < 0){
+          htim12.Instance->CCR1 = 0;
+          htim12.Instance->CCR2 = -pwm_duty;
+        }else{
+          htim12.Instance->CCR2 = 0;
+          htim12.Instance->CCR1 = pwm_duty;
+        }
+        
+        HAL_Delay(3);
+        if(-10 <= pwm_duty && pwm_duty <= 10){
+          break;
+        }
+      }
+*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

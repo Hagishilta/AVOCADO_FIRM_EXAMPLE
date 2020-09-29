@@ -1454,6 +1454,15 @@
                     <name>$PROJ_DIR$\..\Src\st5_driver\st5_hardware.h</name>
                 </file>
             </group>
+            <group>
+                <name>test</name>
+                <file>
+                    <name>$PROJ_DIR$\..\Src\test\test.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\Src\test\test.h</name>
+                </file>
+            </group>
             <file>
                 <name>$PROJ_DIR$\..\Src\main.c</name>
             </file>
@@ -1519,6 +1528,9 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_tim_ex.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_uart.c</name>
             </file>
         </group>
     </group>

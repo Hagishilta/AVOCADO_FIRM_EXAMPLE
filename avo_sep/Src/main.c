@@ -181,10 +181,10 @@ bool rotary_button_mode(){
 
 
 // START Sauce
-#define POSITION_HALF 2500
-#define POSITION_NORMAL 4000
-#define POSITION_ONEHALF 5500
-#define POSITION_MAXIMUM 8000
+#define POSITION_HALF 100
+#define POSITION_NORMAL 200
+#define POSITION_ONEHALF 300
+#define POSITION_MAXIMUM 2500
 #define POSITION_DISASSEMBLE 9800
 
 void sauce_three_way_valve(bool n){

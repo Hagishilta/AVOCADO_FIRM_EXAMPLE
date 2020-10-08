@@ -7,8 +7,8 @@ HeaderPath=..\Drivers\STM32F4xx_HAL_Driver\Inc;..\Drivers\STM32F4xx_HAL_Driver\I
 CDefines=USE_HAL_DRIVER;STM32F446xx;USE_HAL_DRIVER;USE_HAL_DRIVER;
 
 [PreviousGenFiles]
-HeaderPath=C:/Users/John Lee/Desktop/AvokadoLab/2020/AVOCADO_FIRM_EXAMPLE/avo_sep/Inc
+HeaderPath=C:/Users/avokadolab/Desktop/Software/2020/AVOCADO_FIRM_EXAMPLE/avo_sep/Inc
 HeaderFiles=stm32f4xx_it.h;stm32f4xx_hal_conf.h;main.h;
-SourcePath=C:/Users/John Lee/Desktop/AvokadoLab/2020/AVOCADO_FIRM_EXAMPLE/avo_sep/Src
+SourcePath=C:/Users/avokadolab/Desktop/Software/2020/AVOCADO_FIRM_EXAMPLE/avo_sep/Src
 SourceFiles=stm32f4xx_it.c;stm32f4xx_hal_msp.c;main.c;
 

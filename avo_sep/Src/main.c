@@ -81,8 +81,8 @@ static void MX_USART2_UART_Init(void);
 
 // Check Dispenser Type
 #define TEST 0
-#define SAUCE 1
-#define SCREW 0
+#define SAUCE 0
+#define SCREW 1
 #define ROTARY 0
 
 
@@ -103,9 +103,9 @@ uint8_t inputval[8];
 
 
 // START Screw
-#define SCREW_SHUTTER_AMOUNT 1200
-#define SCREW_WEIGHT_1 200
-#define SCREW_WEIGHT_BELOW 30
+#define SCREW_SHUTTER_AMOUNT 450
+#define SCREW_WEIGHT_1 65
+#define SCREW_WEIGHT_BELOW 5
 
 bool screw_shutter_home_sensor(){
   if(HAL_GPIO_ReadPin(inputPort[2], inputPin[2]) == GPIO_PIN_SET){
@@ -417,12 +417,12 @@ bool parse_casData(){
 
 
 // START Motor - DC
-#define MOTOR_SPEED_2_SAUCE 800
+#define MOTOR_SPEED_2_SAUCE 800  
 #define MOTOR_SPEED_5_SAUCE 800
 #define MOTOR_SPEED_2_SCREW 700
-#define MOTOR_SPEED_5_SCREW 700
+#define MOTOR_SPEED_5_SCREW 1400
 #define MOTOR_SPEED_2_ROTARY 700
-#define MOTOR_SPEED_5_ROTARY 300
+#define MOTOR_SPEED_5_ROTARY 300 
 #define MOTOR_FREQUENCY_2 20000
 #define MOTOR_FREQUENCY_5 20000
 
@@ -767,7 +767,7 @@ int32_t sauce_initial_position;
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */  
+  /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
 
@@ -1294,7 +1294,10 @@ int main(void)
         
         // RUN screw
         // TODO : FIX integer limit bug
-        st5.input_cnt = st5.input_cnt + SCREW_SHUTTER_AMOUNT;
+//        st5.input_cnt = st5.input_cnt + SCREW_SHUTTER_AMOUNT;
+          st5.input_cnt = 100000000000;
+        
+        
 //        if(st5.input_cnt < 2147483648){
 //          st5.input_cnt = st5.input_cnt + SCREW_SHUTTER_AMOUNT;
 //        }
